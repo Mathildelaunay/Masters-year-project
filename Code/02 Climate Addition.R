@@ -1,4 +1,4 @@
-# 01_download_climate.R
+# Downloading the climate data to go alongside the mosquito dataset
 # ---------------------------------------------------------------------------
 # Daily climate data (2010-2022) for 149 locations, downloaded from the
 # Open-Meteo Historical Weather API:
@@ -104,7 +104,7 @@ res <- pmap(
   }
 )
 
-stopifnot(length(list.files("out")) == nrow(locs))   # should be 149
+stopifnot(length(list.files("out")) == nrow(locs))   
 
 # 4. Combine the per-location files -----------------------------------------
 all_data <- list.files("out", full.names = TRUE) |>
@@ -150,3 +150,31 @@ final <- all_data |>
   left_join(select(locs, id, elevation, dist_coast_km), by = "id")
 
 write_csv(final, "climate_all.csv")
+ 
+# 8. Merge with mosquito dataset ----------------------------------------------------------
+climate_all$time <- as.Date(climate_all$time)
+
+climate_clean <- climate_all %>%
+  select(
+    lat,
+    lon,
+    time,
+    temperature_2m_mean,
+    temperature_2m_max,
+    temperature_2m_min,
+    wind_speed_10m_max,
+    daylight_duration,
+    precipitation_sum,
+    dist_coast_km,
+    elevation
+  )
+
+mosquito_climate <- mosquitos %>%
+  left_join(
+    climate_clean,
+    by = c(
+      "latitude" = "lat",
+      "longitude" = "lon",
+      "date" = "time"
+    )
+  )

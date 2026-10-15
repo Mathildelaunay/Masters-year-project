@@ -1,4 +1,3 @@
-# Install and load necessary packages if you haven't already
 if(!require("ggplot2"))install.packages("ggplot2")
 if(!require("maps"))install.packages("maps")
 if(!require("plotly"))install.packages("plotly")
