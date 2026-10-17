@@ -28,7 +28,7 @@ abundance_monthly <- mosquito %>%
     .groups = "drop"
   )
 
-ggplot(
+p1 <- ggplot(
   abundance_monthly,
   aes(
     x = month,
@@ -64,7 +64,7 @@ sort(albania_aug2014$value, decreasing = TRUE)
 
 #The outputs indicate an unusually large difference between the beginning of that month and the end
 
-ggplot(
+p2 <- ggplot(
   mosquito %>% filter(Country == "Albania"),
   aes(x = factor(month(date)), y = value)
 ) +
@@ -83,7 +83,7 @@ abundance_monthly_median <- mosquito %>%
     .groups = "drop"
   )
 
-ggplot(
+p3 <- ggplot(
   abundance_monthly_median,
   aes(
     x = month,
@@ -105,5 +105,17 @@ ggplot(
     y = "Median egg abundance",
     colour = "Year"
   )
-
 #The plots aren't much different to the ones that use the mean egg values
+
+
+pdf(
+  "all_visualisations.pdf",
+  width = 10,
+  height = 6
+)
+
+print(p1)
+print(p2)
+print(p3)
+
+dev.off()
