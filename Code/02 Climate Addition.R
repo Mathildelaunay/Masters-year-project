@@ -12,8 +12,8 @@
 #   temperature (mean, max, min) in °C, max wind speed in km/h, daylight duration in seconds,
 #   precipitation sum in mm/day, relative humidity (mean, max, min) in %.
 # Also adds:
-#   - point elevation (Open-Meteo Elevation API, 90 m DEM)
-#   - distance to coast (Natural Earth 1:50m coastline)
+#   - elevation in m (Open-Meteo Elevation API, 90 m DEM)
+#   - distance to coast in km (Natural Earth 1:50m coastline)
 #
 # Input : the mosquito data frame (columns: latitude, longitude, date), which
 #         must be loaded before running this script. From it, the script builds
