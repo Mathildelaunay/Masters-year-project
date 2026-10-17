@@ -1,19 +1,24 @@
 # Downloading the climate data to go alongside the mosquito dataset
-# ---------------------------------------------------------------------------
+
 # Daily climate data (2010-2022) for 149 locations, downloaded from the
-# Open-Meteo Historical Weather API:
+# Open-Meteo Historical Weather API: 
+#   Zippenfenig, P. (2023) Open-Meteo.com Weather API. Zenodo. doi: 10.5281/ZENODO.7970649.
 #   https://open-meteo.com/en/docs/historical-weather-api
-# Data downloaded on 13 Oct 2026.
 #
+# Data downloaded on 17 Oct 2026.
+#
+# Variables (daily):
+#   temperature (mean, max, min) in °C, max wind speed in km/h, daylight duration in seconds,
+#   precipitation sum in mm/day, relative humidity (mean, max, min) in %.
 # Also adds:
 #   - point elevation (Open-Meteo Elevation API, 90 m DEM)
 #   - distance to coast (Natural Earth 1:50m coastline)
 #
 # Input : open_meteo_requests.txt  (headerless: lat, lon, , , start, end)
 # Output: climate_all.csv
-#
-# Re-running is safe: locations already saved in out/ are not downloaded again.
-# ---------------------------------------------------------------------------
+
+if(!require("rnaturalearth"))install.packages("rnaturalearth")
+if(!require("rnaturalearthdata"))install.packages("rnaturalearthdata")
 
 library(httr2)
 library(dplyr)
@@ -21,8 +26,6 @@ library(readr)
 library(purrr)
 library(sf)
 library(rnaturalearth)
-if(!require("rnaturalearth"))install.packages("rnaturalearth")
-if(!require("rnaturalearthdata"))install.packages("rnaturalearthdata")
 
 # 1. Locations ---------------------------------------------------------------
 locs <- read_csv(
@@ -39,13 +42,15 @@ dir.create("out", showWarnings = FALSE)
 daily_vars <- paste(
   "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
   "wind_speed_10m_max", "daylight_duration", "precipitation_sum",
+  "relative_humidity_2m_mean", "relative_humidity_2m_max",
+  "relative_humidity_2m_min",
   sep = ","
 )
 
 # 2. Download functions ------------------------------------------------------
 fetch_one <- function(id, lat, lon, start, end) {
   f <- file.path("out", paste0("loc_", id, ".csv"))
-  if (file.exists(f)) return(invisible(NULL))   # resume support
+  if (file.exists(f)) return(invisible(NULL))  
   
   resp <- request("https://archive-api.open-meteo.com/v1/archive") |>
     req_url_query(
@@ -152,29 +157,18 @@ final <- all_data |>
 write_csv(final, "climate_all.csv")
  
 # 8. Merge with mosquito dataset ----------------------------------------------------------
-climate_all$time <- as.Date(climate_all$time)
-
-climate_clean <- climate_all %>%
+climate_clean <- final |>
   select(
-    lat,
-    lon,
-    time,
-    temperature_2m_mean,
-    temperature_2m_max,
-    temperature_2m_min,
-    wind_speed_10m_max,
-    daylight_duration,
-    precipitation_sum,
-    dist_coast_km,
-    elevation
+    lat, lon, time,
+    temperature_2m_mean, temperature_2m_max, temperature_2m_min,
+    wind_speed_10m_max, daylight_duration, precipitation_sum,
+    relative_humidity_2m_mean, relative_humidity_2m_max, relative_humidity_2m_min,
+    dist_coast_km, elevation
   )
 
-mosquito_climate <- mosquitos %>%
+mosquito_climate <- mosquitos |>
+  mutate(date = as.Date(date)) |>
   left_join(
     climate_clean,
-    by = c(
-      "latitude" = "lat",
-      "longitude" = "lon",
-      "date" = "time"
-    )
+    by = c("latitude" = "lat", "longitude" = "lon", "date" = "time")
   )
