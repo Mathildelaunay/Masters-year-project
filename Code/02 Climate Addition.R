@@ -32,7 +32,7 @@ library(sf)
 library(rnaturalearth)
 
 # 1. Locations ---------------------------------------------------------------
-location_dates <- mosquitos %>%
+location_dates <- mosquito %>%
   filter(
     !is.na(latitude),
     !is.na(longitude),
