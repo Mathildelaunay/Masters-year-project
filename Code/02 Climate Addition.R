@@ -5,7 +5,8 @@
 #   Zippenfenig, P. (2023) Open-Meteo.com Weather API. Zenodo. doi: 10.5281/ZENODO.7970649.
 #   https://open-meteo.com/en/docs/historical-weather-api
 #
-# Data downloaded on 17 Oct 2026.
+# Data in the analysed dataset were downloaded in two batches (13 Oct 2026 and
+# 17 Oct 2026); this script requests all variables in a single download.
 #
 # Variables (daily):
 #   temperature (mean, max, min) in °C, max wind speed in km/h, daylight duration in seconds,
@@ -14,7 +15,10 @@
 #   - point elevation (Open-Meteo Elevation API, 90 m DEM)
 #   - distance to coast (Natural Earth 1:50m coastline)
 #
-# Input : open_meteo_requests.txt  (headerless: lat, lon, , , start, end)
+# Input : the mosquito data frame (columns: latitude, longitude, date), which
+#         must be loaded before running this script. From it, the script builds
+#         open_meteo_requests.txt (one row per location, with that location's
+#         first and last sampling date).
 # Output: climate_all.csv
 
 if(!require("rnaturalearth"))install.packages("rnaturalearth")
@@ -28,6 +32,39 @@ library(sf)
 library(rnaturalearth)
 
 # 1. Locations ---------------------------------------------------------------
+location_dates <- mosquitos %>%
+  filter(
+    !is.na(latitude),
+    !is.na(longitude),
+    !is.na(date)
+  ) %>%
+  group_by(latitude, longitude) %>%
+  summarise(
+    start_date = min(as.Date(date)),
+    end_date = max(as.Date(date)),
+    .groups = "drop"
+  ) %>%
+  arrange(latitude, longitude)
+
+# Format each location as a request for Open-Meteo
+open_meteo_requests <- location_dates %>%
+  transmute(
+    request = paste(
+      latitude,
+      longitude,
+      "",  
+      "",  
+      format(start_date, "%Y-%m-%d"),
+      format(end_date, "%Y-%m-%d"),
+      sep = ","
+    )
+  )
+
+writeLines(
+  open_meteo_requests$request,
+  "open_meteo_requests.txt"
+)
+
 locs <- read_csv(
   "open_meteo_requests.txt",
   col_names = c("lat", "lon", "blank1", "blank2", "start", "end"),
@@ -166,7 +203,7 @@ climate_clean <- final |>
     dist_coast_km, elevation
   )
 
-mosquito_climate <- mosquitos |>
+mosquito_climate <- mosquito |>
   mutate(date = as.Date(date)) |>
   left_join(
     climate_clean,
