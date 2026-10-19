@@ -3,16 +3,17 @@ library(lubridate)
 library(tidyr)
 
 # Want to get a list of the first day of the week for all the dates with observations
-mosquito_daily <- mosquito_climate %>%
+mosquito_climate <- mosquito_climate %>%
   mutate(
     date = as.Date(date),
     week_start = floor_date(date, unit = "week", week_start = 1)
   )
 
-# Create a dataset which includes country, region, coordinates, first day of every week,
+# Create a dataset which includes country, region, coordinates, 
+# first day of every week,
 # mean value of egg count in that week (NA if week is not observed), 
 # elevation and distance to coast.
-abundance_weekly <- mosquito_daily %>%
+abundance_weekly <- mosquito_climate %>%
   group_by(
     Country, Region, latitude, longitude, week_start
   ) %>%
@@ -28,7 +29,7 @@ abundance_weekly <- mosquito_daily %>%
   )
 
 # Keep one weather record per location per day
-climate_daily <- mosquito_daily %>%
+climate_daily <- mosquito_climate %>%
   distinct(
     Country, latitude, longitude, date, week_start,
     temperature_2m_mean,
@@ -104,15 +105,6 @@ mosquito_weekly_complete <- mosquito_weekly %>%
   ) %>%
   arrange(Country, latitude, longitude, week_start)
 
-mosquito_weekly_complete %>%
-  summarise(
-    total_rows = n(),
-    missing_abundance = sum(is.na(abundance)),
-    missing_temp = sum(is.na(temp_mean)),
-    missing_precipitation = sum(is.na(precipitation)),
-    missing_humidity = sum(is.na(humidity))
-  )
-
 
 # Prepare the daily climate data
 climate_daily_full <- climate_full %>%
@@ -156,7 +148,7 @@ climate_weekly_full <- climate_daily_full %>%
     .groups = "drop"
   )
 
-mosquito_weekly_final <- mosquito_weekly_complete %>%
+mosquito_weekly <- mosquito_weekly_complete %>%
   select(
     -temp_mean, -temp_max, -temp_min,
     -precipitation, -wind_speed, -humidity
@@ -171,7 +163,7 @@ mosquito_weekly_final <- mosquito_weekly_complete %>%
   ) %>%
   arrange(Country, latitude, longitude, week_start)
 
-mosquito_weekly_lags <- mosquito_weekly_final %>%
+mosquito_weekly_lags <- mosquito_weekly %>%
   group_by(Country, latitude, longitude) %>%
   arrange(week_start, .by_group = TRUE) %>%
   mutate(
@@ -208,6 +200,27 @@ mosquito_weekly_lags <- mosquito_weekly_final %>%
   ) %>%
   ungroup()
 
+# Replace the NA values in the descriptive columns of the non-observed dates
+mosquito_weekly_lags <- mosquito_weekly_lags %>%
+  group_by(Country, latitude, longitude) %>%
+  mutate(
+    elevation = if (all(is.na(elevation))) {
+      NA_real_
+    } else {
+      first(elevation[!is.na(elevation)])
+    },
+    dist_coast_km = if (all(is.na(dist_coast_km))) {
+      NA_real_
+    } else {
+      first(dist_coast_km[!is.na(dist_coast_km)])
+    },
+    Region = if (all(is.na(Region))) {
+      NA_real_
+    } else {
+      first(Region[!is.na(Region)])
+    }
+  ) %>%
+  ungroup()
 
 # Create a new dataset with four new columns:
 # 2 representing the broad annual variation 
