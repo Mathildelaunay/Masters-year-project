@@ -208,4 +208,18 @@ mosquito_weekly_lags <- mosquito_weekly_final %>%
   ) %>%
   ungroup()
 
-mosquito_weekly_lags <- mosquito_weekly_lags[complete.cases(mosquito_weekly_lags[, c("abundance")]),]
+
+# Create a new dataset with four new columns:
+# 2 representing the broad annual variation 
+# 2 representing shorter seasonal variation
+mosquito_weekly_fourier <- mosquito_weekly_lags %>%
+  mutate(
+    week_of_year = lubridate::isoweek(week_start),
+    week_of_year = pmin(week_of_year, 52),
+    
+    S1 = sin(2 * pi * week_of_year / 52),
+    C1 = cos(2 * pi * week_of_year / 52),
+    
+    S2 = sin(4 * pi * week_of_year / 52),
+    C2 = cos(4 * pi * week_of_year / 52)
+  )
