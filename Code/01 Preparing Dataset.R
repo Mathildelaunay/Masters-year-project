@@ -1,3 +1,117 @@
+if(!require("ggplot2"))install.packages("ggplot2")
+if(!require("maps"))install.packages("maps")
+if(!require("plotly"))install.packages("plotly")
+if(!require("tidyverse"))install.packages("tidyverse")
+if(!require("readxl"))install.packages("readxl")
+if(!require("openxlsx"))install.packages("openxlsx")
+if(!require("lubridate"))install.packages("lubridate")
+
+library(ggplot2)
+library(maps)
+library(plotly)
+library(readxl)
+library(lubridate)
+library(dplyr)
+
+
+mosquito <- Vectabundace_v015 # After uploading the dataset from the xlsx file into R. 
+
+#I cleaned the dataset by removing the NA values from the value column as the article discussing the dataset says "If an ovitrap is found dry or overturned, the masonite stick is not considered, and therefore the value assigned to that ovitrap is NA"
+#Then, I removed the columns that describe the species it is investigating and therefore were the same for every observation.
+mosquito <- mosquito[complete.cases(mosquito[, c("value")]),]
+mosquito[ , c("trap_type", "larvicide_presence", "Canonical_name", "kingdom", "phylum", "class", "order", "family", "genus", "species", "life_stage", "EPSG", "DOI_website", "contact_person_email", "contact_person", "Institute")] <- list(NULL)
+
+mosquito$date <- as.Date(mosquito$date, origin = "1899-12-30") #Making sure that the R reads the dates as dates
+
+abundance_monthly <- mosquito %>% # Getting the monthly mean values of mosquito abundance for every country
+  mutate(month = month(date)) %>%
+  group_by(Country, year, month) %>%
+  summarise(
+    abundance = mean(value),
+    .groups = "drop"
+  )
+
+# Next, plot the monthly mosquito abundance for every country
+p1 <- ggplot(
+  abundance_monthly,
+  aes(
+    x = month,
+    y = abundance,
+    group = year,
+    colour = factor(year)
+  )
+) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ Country, scales = "free_y") +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    title = "Mosquito abundance throughout the year",
+    x = "Month",
+    y = "Mean egg abundance",
+    colour = "Year"
+  )
+# The output plot shows that there is an unusual peak in egg abundance in August 2014 in Albania, so let's investigate this section of the dataset closer
+
+albania_aug2014 <- mosquito %>%
+  filter(
+    Country == "Albania",
+    year == 2014,
+    month(date) == 8
+  )
+summary(albania_aug2014$value)
+nrow(albania_aug2014)
+sort(albania_aug2014$value, decreasing = TRUE)
+
+# The outputs indicate an unusually large difference between the lowest and highest recorded number of mosquitos in any day.
+p2 <- ggplot(
+  mosquito %>% filter(Country == "Albania"),
+  aes(x = factor(month(date)), y = value)
+) +
+  geom_boxplot() +
+  labs(
+    title = "Distribution of mosquito abundance in Albania",
+    x = "Month",
+    y = "Egg abundance"
+  )
+
+# Look at the distribution of the median abundance values instead of the mean
+abundance_monthly_median <- mosquito %>%
+  mutate(month = month(date)) %>%
+  group_by(Country, year, month) %>%
+  summarise(
+    abundance = median(value),
+    .groups = "drop"
+  )
+
+p3 <- ggplot(
+  abundance_monthly_median,
+  aes(
+    x = month,
+    y = abundance,
+    group = year,
+    colour = factor(year)
+  )
+) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ Country, scales = "free_y") +
+  scale_x_continuous(
+    breaks = 1:12,
+    labels = month.abb
+  ) +
+  labs(
+    title = "Mosquito abundance throughout the year",
+    x = "Month",
+    y = "Median egg abundance",
+    colour = "Year"
+  )
+# The plots aren't much different to the ones that use the mean egg values
+
+
 # Downloading the climate data to go alongside the mosquito dataset
 
 # Daily climate data (2010-2022) for 149 locations, downloaded from the
@@ -22,17 +136,15 @@
 # Output: climate_all.csv
 
 library(httr2)
-library(dplyr)
 library(readr)
 library(purrr)
 library(sf)
-library(lubridate)
 library(tidyr)
 library(rnaturalearth)
 if(!require("rnaturalearth"))install.packages("rnaturalearth")
 if(!require("rnaturalearthdata"))install.packages("rnaturalearthdata")
 
-# 1. Locations ---------------------------------------------------------------
+# Create a list of locations ---------------------------------------------------
 locs <- read_csv(
   "open_meteo_requests.txt",
   col_names = c("lat", "lon", "blank1", "blank2", "start", "end"),
@@ -50,7 +162,7 @@ daily_vars <- paste(
   sep = ","
 )
 
-# 2. Download functions ------------------------------------------------------
+# Download functions -----------------------------------------------------------
 fetch_one <- function(id, lat, lon, start, end) {
   f <- file.path("out", paste0("loc_", id, ".csv"))
   if (file.exists(f)) return(invisible(NULL))   # resume support
@@ -98,7 +210,7 @@ fetch_with_wait <- function(id, lat, lon, start, end, max_waits = 12) {
   out
 }
 
-# 3. Download everything that is still missing -------------------------------
+# Download everything that is still missing ------------------------------------
 todo <- locs |>
   filter(!file.exists(file.path("out", paste0("loc_", id, ".csv"))))
 
@@ -114,13 +226,13 @@ res <- pmap(
 
 stopifnot(length(list.files("out")) == nrow(locs))   # should be 149
 
-# 4. Combine the per-location files -----------------------------------------
+# Combine the per-location files -----------------------------------------------
 all_data <- list.files("out", full.names = TRUE) |>
   map(\(f) read_csv(f, col_types = cols(id = col_character(),
                                         .default = col_guess()))) |>
   bind_rows()
 
-# 5. Point elevation (up to 100 coordinates per call) ------------------------
+# Point elevation (up to 100 coordinates per call) -----------------------------
 get_elev <- function(d) {
   request("https://api.open-meteo.com/v1/elevation") |>
     req_url_query(
@@ -138,7 +250,7 @@ locs$elevation <- locs |>
   map(get_elev) |>
   unlist()
 
-# 6. Distance to coast -------------------------------------------------------
+# Distance to coast ------------------------------------------------------------
 pts <- st_as_sf(locs, coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
   st_transform(3035)    # metric projection for Europe
 
@@ -148,7 +260,7 @@ coast <- ne_coastline(scale = 50, returnclass = "sf") |>
 
 locs$dist_coast_km <- as.numeric(st_distance(pts, coast)) / 1000
 
-# 7. Merge and save ----------------------------------------------------------
+# Merge and save ---------------------------------------------------------------
 # grid_elevation is dropped: it is identical to the point elevation from the
 # Elevation API (both use the 90 m DEM).
 final_without_humidity <- all_data |>
@@ -157,7 +269,7 @@ final_without_humidity <- all_data |>
 
 #write_csv(final_without_humidity, "climate_without_humidity.csv")    un-tag if not done yet
 
-# Adding humidity data
+# Adding humidity data ---------------------------------------------------------
 
 dir.create("out_humidity", showWarnings = FALSE)
 
@@ -208,6 +320,7 @@ humidity <- list.files("out_humidity", full.names = TRUE) |>
   bind_rows() |>
   mutate(time = as.Date(time))
 
+# Combine everything into one file ---------------------------------------------
 climate_full <- read_csv("climate_without_humidity.csv",
                          col_types = cols(id = col_character(), .default = col_guess())) |>
   mutate(time = as.Date(time)) |>
@@ -216,7 +329,7 @@ climate_full <- read_csv("climate_without_humidity.csv",
 #write_csv(climate_full, "climate.csv")     #un-tag if not downloaded yet
 
 
-# Next, merge the dataset containing all of the climate data with the mosquito dataset
+# Merge the datasets -----------------------------------------------------------
 
 #climate <- read_csv("climate.csv")   un-tag if the file has no been imported
 
@@ -250,10 +363,7 @@ mosquito_climate <- mosquito %>%
     )
   )
 
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-
+# Move on to visualisations ----------------------------------------------------
 # Summary of daily climate data by location and date
 climate_daily <- mosquito_climate %>%
   distinct(
@@ -371,26 +481,13 @@ p_wind <- plot_seasonal(
   seasonal_data, "wind_speed",
   "Mean daily maximum wind speed (m/s)"
 )
-p_precipitation
-# Save the plots as a pdf
-
-pdf(
-  "visualisation_2.pdf",
-  width = 10,
-  height = 6
-)
-
-print(p_temperature)
-print(p_precipitation)
-print(p_humidity)
-print(p_daylight)
-print(p_wind)
-
-dev.off()
 
 # This is an average across the available records, so locations with more 
 # recorded days can contribute more heavily than locations with fewer records. 
 # It is not necessarily an equally weighted average of each location.
+
+
+# Prepare data to add extra columns --------------------------------------------
 
 # Want to get a list of the first day of the week for all the dates with observations
 mosquito_daily <- mosquito_climate %>%
@@ -636,3 +733,20 @@ mosquito_weekly_fourier <- mosquito_weekly_lags %>%
     S2 = sin(4 * pi * week_of_year / 52),
     C2 = cos(4 * pi * week_of_year / 52)
   )
+#-------------------------------------------------------------------------------
+pdf(
+  "Plots.pdf",
+  width = 10,
+  height = 6
+)
+
+print(p1)
+print(p2)
+print(p3)
+print(p_temperature)
+print(p_precipitation)
+print(p_humidity)
+print(p_daylight)
+print(p_wind)
+
+dev.off()
