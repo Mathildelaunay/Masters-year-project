@@ -12,15 +12,16 @@ library(plotly)
 library(readxl)
 library(lubridate)
 
-mosquito <- read.xlsx("Vectabundace_v015.xlsx")
+mosquito <- Vectabundace_v015 # After uploading the dataset from the xlsx file into R. 
+
 #I cleaned the dataset by removing the NA values from the value column as the article discussing the dataset says "If an ovitrap is found dry or overturned, the masonite stick is not considered, and therefore the value assigned to that ovitrap is NA"
 #Then, I removed the columns that describe the species it is investigating and therefore were the same for every observation.
 mosquito <- mosquito[complete.cases(mosquito[, c("value")]),]
-mosquito[ , c("trap_type", "larvicide_presence", "Canonical_name", "kingdom", "phylum", "class", "order", "family", "genus", "species", "life_stage")] <- list(NULL)
+mosquito[ , c("trap_type", "larvicide_presence", "Canonical_name", "kingdom", "phylum", "class", "order", "family", "genus", "species", "life_stage", "EPSG", "DOI_website", "contact_person_email", "contact_person", "Institute")] <- list(NULL)
 
-mosquito$date <- as.Date(mosquito$date, origin = "1899-12-30")
+mosquito$date <- as.Date(mosquito$date, origin = "1899-12-30") #Making sure that the R reads the dates as dates
 
-abundance_monthly <- mosquito %>%
+abundance_monthly <- mosquito %>% # Getting the monthly mean values of mosquito abundance for every country
   mutate(month = month(date)) %>%
   group_by(Country, year, month) %>%
   summarise(
@@ -28,6 +29,7 @@ abundance_monthly <- mosquito %>%
     .groups = "drop"
   )
 
+# Next, plot the monthly mosquito abundance for every country
 p1 <- ggplot(
   abundance_monthly,
   aes(
@@ -50,7 +52,7 @@ p1 <- ggplot(
     y = "Mean egg abundance",
     colour = "Year"
   )
-#The output plot shows that there is an unusual peak in egg abundance in August 2014 in Albania, so let's investigate this section of the dataset closer
+# The output plot shows that there is an unusual peak in egg abundance in August 2014 in Albania, so let's investigate this section of the dataset closer
 
 albania_aug2014 <- mosquito %>%
   filter(
@@ -62,8 +64,7 @@ summary(albania_aug2014$value)
 nrow(albania_aug2014)
 sort(albania_aug2014$value, decreasing = TRUE)
 
-#The outputs indicate an unusually large difference between the beginning of that month and the end
-
+# The outputs indicate an unusually large difference between the lowest and highest recorded number of mosquitos in any day.
 p2 <- ggplot(
   mosquito %>% filter(Country == "Albania"),
   aes(x = factor(month(date)), y = value)
@@ -75,6 +76,7 @@ p2 <- ggplot(
     y = "Egg abundance"
   )
 
+# Look at the distribution of the median abundance values instead of the mean
 abundance_monthly_median <- mosquito %>%
   mutate(month = month(date)) %>%
   group_by(Country, year, month) %>%
@@ -105,9 +107,9 @@ p3 <- ggplot(
     y = "Median egg abundance",
     colour = "Year"
   )
-#The plots aren't much different to the ones that use the mean egg values
+# The plots aren't much different to the ones that use the mean egg values
 
-
+# Then create a file with the plots
 pdf(
   "all_visualisations.pdf",
   width = 10,
