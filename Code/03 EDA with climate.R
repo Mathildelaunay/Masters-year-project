@@ -133,12 +133,6 @@ p_wind <- plot_seasonal(
   "Median daily maximum wind speed (m/s)"
 )
 
-p_temperature
-p_precipitation
-p_humidity
-p_daylight
-p_wind
-
 pdf(
   "Feature Engineering Motivation.pdf",
   width = 10,
