@@ -24,7 +24,7 @@ climate_monthly <- climate_daily %>%
   summarise(
     temperature = median(temperature_2m_mean, na.rm = TRUE),
     precipitation = median(precipitation_sum, na.rm = TRUE),
-    wind_speed = max(wind_speed_10m_max, na.rm = TRUE),
+    wind_speed = median(wind_speed_10m_max, na.rm = TRUE),
     daylight_hours = median(daylight_duration, na.rm = TRUE) / 3600,
     humidity = median(relative_humidity_2m_mean, na.rm = TRUE),
     .groups = "drop"
