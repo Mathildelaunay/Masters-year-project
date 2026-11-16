@@ -49,7 +49,7 @@ complete_weekly_abundance <- abundance_weekly %>%
   arrange(Country, latitude, longitude, week_start)
 
 # Prepare the daily climate data with a week start indicator.
-full_climate_daily <- climate %>%
+full_climate_daily <- final %>%
   mutate(
     date = as.Date(time),
     week_start = floor_date(date, unit = "week", week_start = 1)
@@ -75,25 +75,18 @@ full_climate_weekly <- full_climate_daily %>%
   complete(week_start = seq.Date(min(week_start), max(week_start), by = "week")) %>%
   ungroup()
 
-# Biological threshold: Ae. albopictus lower developmental zero ~10.4 °C.
-# Temperatures below it are set to 0 (NAs stay NA).
-temp_threshold <- 10.4
-
-full_climate_weekly <- full_climate_weekly %>%
-  mutate(
-    across(
-      c(med_temp, max_temp, min_temp),
-      ~ if_else(.x < temp_threshold, 0, .x),
-      .names = "{.col}_threshold"
-    )
-  )
-
 # Window = current week + the (n - 1) weeks before it, based on dates.
-moving_median <- function(x, index, n) {
-  slide_index_dbl(
-    x, index,
-    ~ median(.x, na.rm = TRUE),
-    .before = lubridate::days(7 * (n - 1)),
+moving_median <- function(x, n) {
+  slider::slide_dbl(
+    x,
+    ~ {
+      if (anyNA(.x)) {
+        NA_real_
+      } else {
+        median(.x)
+      }
+    },
+    .before = n - 1,
     .complete = TRUE
   )
 }
@@ -112,28 +105,14 @@ full_climate_weekly <- full_climate_weekly %>%
     across(
       all_of(mm_vars),
       list(
-        MM2 = ~ moving_median(.x, week_start, 2),
-        MM3 = ~ moving_median(.x, week_start, 3)
+        MM2 = ~ moving_median(.x, 2),
+        MM3 = ~ moving_median(.x, 3)
       ),
       .names = "{.col}_{.fn}"
     )
   ) %>%
   ungroup()
 
-temp_vars <- c(
-  "med_temp", "max_temp", "min_temp",
-  "med_temp_MM2", "max_temp_MM2", "min_temp_MM2",
-  "med_temp_MM3", "max_temp_MM3", "min_temp_MM3"
-)
-
-full_climate_weekly <- full_climate_weekly %>%
-  mutate(
-    across(
-      all_of(temp_vars),
-      ~ if_else(.x < temp_threshold, 0, .x),
-      .names = "{.col}_threshold"
-    )
-  )
 
 # Now we can add on to complete_weekly_abundance by joining it with climate data.
 complete_mosquito_weekly <- complete_weekly_abundance %>%
@@ -149,6 +128,41 @@ lags_mosquito_weekly <- complete_mosquito_weekly %>%
   group_by(Country, latitude, longitude) %>%
   arrange(week_start, .by_group = TRUE) %>%
   mutate(
+    
+    med_temp_lag1 = lag(med_temp, 1),
+    med_temp_lag2 = lag(med_temp, 2),
+    med_temp_lag3 = lag(med_temp, 3),
+    
+    max_temp_lag1 = lag(max_temp, 1),
+    max_temp_lag2 = lag(max_temp, 2),
+    max_temp_lag3 = lag(max_temp, 3),
+    
+    min_temp_lag1 = lag(min_temp, 1),
+    min_temp_lag2 = lag(min_temp, 2),
+    min_temp_lag3 = lag(min_temp, 3),
+    
+    
+    max_humidity_lag1 = lag(max_humidity, 1),
+    max_humidity_lag2 = lag(max_humidity, 2),
+    max_humidity_lag3 = lag(max_humidity, 3),
+    
+    min_humidity_lag1 = lag(min_humidity, 1),
+    min_humidity_lag2 = lag(min_humidity, 2),
+    min_humidity_lag3 = lag(min_humidity, 3),
+    
+    med_humidity_lag1 = lag(med_humidity, 1),
+    med_humidity_lag2 = lag(med_humidity, 2),
+    med_humidity_lag3 = lag(med_humidity, 3),
+    
+    
+    wind_speed_lag1 = lag(max_wind_speed, 1),
+    wind_speed_lag2 = lag(max_wind_speed, 2),
+    wind_speed_lag3 = lag(max_wind_speed, 3),
+    
+    photoperiod_lag1 = lag(photoperiod, 1),
+    photoperiod_lag2 = lag(photoperiod, 2),
+    photoperiod_lag3 = lag(photoperiod, 3),
+    
     # Precipitation accumulated over windows including the current week
     precipitation_2w = precipitation +
       lag(precipitation, 1),
@@ -166,6 +180,7 @@ lags_mosquito_weekly <- complete_mosquito_weekly %>%
     AR2 = lag(abundance, 2)
   ) %>%
   ungroup()
+
 
 # Add the other variables to complete the dataset and also
 # replace the NA values in the descriptive columns of the non-observed dates:
@@ -190,6 +205,31 @@ lags_mosquito_weekly <- lags_mosquito_weekly %>%
   ) %>%
   ungroup()
 
+# All original temperature variables
+temp_vars <- c(
+  "med_temp", "max_temp", "min_temp",
+  "med_temp_MM2", "max_temp_MM2", "min_temp_MM2",
+  "med_temp_MM3", "max_temp_MM3", "min_temp_MM3",
+  "med_temp_lag1", "med_temp_lag2", "med_temp_lag3",
+  "max_temp_lag1", "max_temp_lag2", "max_temp_lag3",
+  "min_temp_lag1", "min_temp_lag2", "min_temp_lag3"
+)
+
+# Create thresholded versions at 10.4°C and 15°C
+lags_mosquito_weekly <- lags_mosquito_weekly %>%
+  mutate(
+    across(
+      all_of(temp_vars),
+      ~ if_else(.x < 10.4, 0, .x),
+      .names = "{.col}_TH10_4"
+    ),
+    across(
+      all_of(temp_vars),
+      ~ if_else(.x < 15, 0, .x),
+      .names = "{.col}_TH15"
+    )
+  )
+
 # Create a new dataset with four new columns:
 # 2 representing the broad annual variation 
 # 2 representing shorter seasonal variation
@@ -206,3 +246,4 @@ mosquito_weekly_fourier <- lags_mosquito_weekly %>%
   )
 
 ARdataset <- mosquito_weekly_fourier[complete.cases(mosquito_weekly_fourier[, c("abundance")]),]
+
