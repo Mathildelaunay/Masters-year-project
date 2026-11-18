@@ -93,7 +93,8 @@ fetch_one <- function(id, lat, lon, start, end) {
       latitude = lat, longitude = lon,
       start_date = as.character(start), end_date = as.character(end),
       daily = daily_vars,
-      timezone = "auto"
+      timezone = "auto",
+      models = "era5"
     ) |>
     req_retry(
       max_tries = 6,
